@@ -20,6 +20,7 @@ export default function ProblemPage() {
     const problemId = params.id as string;
 
     const [problem, setProblem] = useState<any>(null);
+    const [allProblems, setAllProblems] = useState<any[]>([]);
     const [testcases, setTestcases] = useState<any[]>([]);
     
     const [selectedLanguage, setSelectedLanguage] = useState(LANGUAGES[0]);
@@ -29,17 +30,19 @@ export default function ProblemPage() {
     const [output, setOutput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     
-    // Verdict state
     const [verdict, setVerdict] = useState<any>(null);
 
     useEffect(() => {
         if (!problemId) return;
 
-        async function fetchProblem() {
+        async function fetchData() {
+            // Fetch all problems for navbar
+            const { data: allP } = await supabase.from("problems").select("id, title").order("id", { ascending: true });
+            if (allP) setAllProblems(allP);
+
             const { data: pData } = await supabase.from("problems").select("*").eq("id", problemId).single();
             if (pData) {
                 setProblem(pData);
-                // Set initial code based on language
                 const starterCode = pData.starter_code || {};
                 setCode(starterCode[selectedLanguage.editorLanguage] || "");
             }
@@ -52,7 +55,7 @@ export default function ProblemPage() {
                 }
             }
         }
-        fetchProblem();
+        fetchData();
     }, [problemId]);
 
     const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -115,129 +118,215 @@ export default function ProblemPage() {
         }
     };
 
-    if (!problem) return <div className="p-8 text-white">Loading problem...</div>;
+    if (!problem) return (
+        <div className="flex h-screen bg-[#0f0f11] items-center justify-center">
+            <div className="w-8 h-8 border-4 border-gray-600 border-t-blue-500 rounded-full animate-spin"></div>
+        </div>
+    );
 
     return (
-        <div className="flex h-screen bg-[#0f0f0f] text-gray-300 font-sans">
-            {/* Left Panel: Problem Statement */}
-            <div className="w-1/3 flex flex-col border-r border-[#333] overflow-y-auto">
-                <div className="bg-[#1e1e1e] p-4 border-b border-[#333] flex items-center gap-4">
-                    <Link href="/" className="text-gray-400 hover:text-white transition-colors p-1 hover:bg-[#333] rounded-md" title="Back to problems">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                        </svg>
+        <div className="flex flex-col h-screen bg-[#0f0f11] text-gray-300 font-sans">
+            {/* Top Navbar */}
+            <nav className="h-14 bg-[#18181b] border-b border-[#27272a] flex items-center px-6 shrink-0 z-10 shadow-sm">
+                <div className="flex items-center gap-2 mr-8">
+                    <Link href="/" className="flex items-center gap-2">
+                        <span className="text-white font-bold text-lg tracking-wide hover:text-gray-300 transition-colors">Code Compiler</span>
                     </Link>
-                    <h1 className="text-2xl font-bold text-white">{problem.id}. {problem.title}</h1>
                 </div>
-                <div className="p-6 flex-1 whitespace-pre-wrap text-sm leading-relaxed">
-                    <ReactMarkdown 
-                        components={{
-                            p: ({node, ...props}) => <p className="mb-4" {...props} />,
-                            strong: ({node, ...props}) => <strong className="font-bold text-white" {...props} />,
-                            code: ({node, inline, ...props}: any) => inline 
-                                ? <code className="bg-[#2d2d2d] px-1 py-0.5 rounded text-gray-200 font-mono text-xs" {...props} /> 
-                                : <code {...props} />,
-                            ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4" {...props} />,
-                            li: ({node, ...props}) => <li className="mb-1" {...props} />
-                        }}
-                    >
-                        {problem.description ? problem.description.replace(/\\n/g, '\n') : ''}
-                    </ReactMarkdown>
-                    
-                    <h3 className="text-lg font-semibold text-white mt-8 mb-2">Constraints:</h3>
-                    <div className="bg-[#1e1e1e] p-4 rounded-md font-mono text-xs">
-                        {problem.constraints ? problem.constraints.replace(/\\n/g, '\n') : ''}
-                    </div>
-
-                    {testcases.map((tc, idx) => (
-                        <div key={tc.id} className="mt-6">
-                            <h3 className="font-semibold text-white mb-2">Example {idx + 1}:</h3>
-                            <div className="bg-[#1e1e1e] p-4 rounded-md font-mono text-xs mb-2">
-                                <p><span className="text-gray-500">Input:</span><br/>{tc.input ? tc.input.replace(/\\n/g, '\n') : ''}</p>
-                                <p className="mt-2"><span className="text-gray-500">Output:</span><br/>{tc.expected_output ? tc.expected_output.replace(/\\n/g, '\n') : ''}</p>
-                            </div>
-                        </div>
+                <div className="flex gap-6 text-sm overflow-x-auto">
+                    {allProblems.map(p => (
+                        <Link 
+                            key={p.id} 
+                            href={`/problems/${p.id}`} 
+                            className={`whitespace-nowrap px-3 py-1 rounded-md transition-colors ${
+                                p.id.toString() === problemId 
+                                ? "bg-[#27272a] text-white font-medium" 
+                                : "text-gray-400 hover:text-white"
+                            }`}
+                        >
+                            {p.title}
+                        </Link>
                     ))}
                 </div>
-            </div>
-
-            {/* Right Panel: Editor and Output */}
-            <div className="w-2/3 flex flex-col">
-                {/* Editor Header */}
-                <div className="flex items-center justify-between px-4 py-2 bg-[#1e1e1e] border-b border-[#333]">
-                    <select
-                        value={selectedLanguage.name}
-                        onChange={handleLanguageChange}
-                        className="bg-[#2d2d2d] border border-[#555] text-white text-sm rounded-md px-3 py-1 outline-none"
-                    >
-                        {LANGUAGES.map(lang => (
-                            <option key={lang.name} value={lang.name}>{lang.name}</option>
-                        ))}
-                    </select>
-                    <div className="flex gap-3">
-                        <button onClick={handleRunCode} disabled={isLoading} className="px-4 py-1.5 bg-[#2d2d2d] hover:bg-[#3d3d3d] text-white text-sm font-medium rounded-md transition-colors disabled:opacity-50">
-                            Run Custom Input
-                        </button>
-                        <button onClick={handleSubmit} disabled={isLoading} className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors disabled:opacity-50 flex items-center gap-2">
-                            {isLoading ? 'Running...' : 'Submit'}
-                        </button>
+                <div className="ml-auto flex items-center gap-4">
+                    <div className="text-xs text-gray-500 flex items-center gap-2">
+                        <span className="bg-[#27272a] px-2 py-1 rounded text-gray-400 border border-[#3f3f46]">Ctrl</span>
+                        <span className="bg-[#27272a] px-2 py-1 rounded text-gray-400 border border-[#3f3f46]">+</span>
+                        <span className="bg-[#27272a] px-2 py-1 rounded text-gray-400 border border-[#3f3f46]">&crarr;</span>
+                        <span className="ml-1">Run</span>
                     </div>
                 </div>
+            </nav>
 
-                {/* Editor Container */}
-                <div className="flex-1">
-                    <Editor
-                        height="100%"
-                        theme="vs-dark"
-                        language={selectedLanguage.editorLanguage}
-                        value={code}
-                        onChange={(value) => setCode(value || "")}
-                        options={{ minimap: { enabled: false }, fontSize: 14, padding: { top: 16 } }}
-                    />
-                </div>
-
-                {/* Bottom Panel: Input / Output / Verdict */}
-                <div className="h-64 flex flex-col bg-[#1e1e1e] border-t border-[#333]">
-                    <div className="flex bg-[#2d2d2d] text-xs font-medium border-b border-[#333]">
-                        <div className="px-4 py-2 border-r border-[#333] text-gray-300">Console</div>
-                    </div>
-                    <div className="flex flex-1 overflow-hidden">
-                        <div className="w-1/2 p-4 border-r border-[#333] flex flex-col">
-                            <label className="text-xs text-gray-500 mb-2 uppercase tracking-wider">Custom Input</label>
-                            <textarea
-                                value={customInput}
-                                onChange={(e) => setCustomInput(e.target.value)}
-                                className="flex-1 bg-[#1e1e1e] text-gray-300 outline-none resize-none font-mono text-sm"
-                                spellCheck={false}
-                            />
+            {/* Main Content Area */}
+            <div className="flex-1 flex overflow-hidden">
+                {/* Left Panel: Problem Statement */}
+                <div className="w-[45%] flex flex-col border-r border-[#27272a] overflow-y-auto bg-[#18181b]">
+                    <div className="p-6">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-1 h-4 bg-yellow-500 rounded-full"></div>
+                            <h1 className="text-[11px] font-bold text-gray-500 tracking-widest uppercase">Problem</h1>
                         </div>
-                        <div className="w-1/2 p-4 flex flex-col overflow-auto">
-                            {verdict ? (
-                                <div>
-                                    <h2 className={`text-xl font-bold mb-2 ${verdict.verdict === 'Accepted' ? 'text-green-500' : 'text-red-500'}`}>
-                                        {verdict.verdict}
-                                    </h2>
-                                    <p className="text-sm text-gray-400 mb-4">Passed {verdict.passed} / {verdict.total} testcases.</p>
-                                    {verdict.details && verdict.details.length > 0 && (
-                                        <div className="bg-[#2d2d2d] p-3 rounded font-mono text-xs mt-2 overflow-x-auto text-red-400 whitespace-pre-wrap">
-                                            {verdict.details[0].error ? verdict.details[0].error : (
-                                                <>
-                                                    <p className="mb-2"><span className="text-gray-400">Input:</span><br/>{verdict.details[0].input ? verdict.details[0].input.replace(/\\n/g, '\n') : ''}</p>
-                                                    <p className="mb-2"><span className="text-gray-400">Expected:</span><br/>{verdict.details[0].expected ? verdict.details[0].expected.replace(/\\n/g, '\n') : ''}</p>
-                                                    <p><span className="text-gray-400">Actual:</span><br/>{verdict.details[0].actual ? verdict.details[0].actual.replace(/\\n/g, '\n') : ''}</p>
-                                                </>
-                                            )}
-                                        </div>
-                                    )}
+                        
+                        <h2 className="text-xl font-bold text-gray-100 mb-6">{problem.id}. {problem.title}</h2>
+                        
+                        <div className="prose prose-invert max-w-none text-sm text-gray-400 leading-relaxed">
+                            <ReactMarkdown 
+                                components={{
+                                    p: ({node, ...props}) => <p className="mb-4 text-gray-400" {...props} />,
+                                    strong: ({node, ...props}) => <strong className="font-semibold text-gray-200" {...props} />,
+                                    code: ({node, inline, ...props}: any) => inline 
+                                        ? <code className="bg-[#27272a] px-1.5 py-0.5 rounded text-blue-300 font-mono text-[13px]" {...props} /> 
+                                        : <code {...props} />,
+                                    ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-1" {...props} />,
+                                    li: ({node, ...props}) => <li className="text-gray-400" {...props} />
+                                }}
+                            >
+                                {problem.description ? problem.description.replace(/\\n/g, '\n') : ''}
+                            </ReactMarkdown>
+                        </div>
+                        
+                        <h3 className="text-[11px] font-bold text-gray-500 tracking-widest uppercase mt-10 mb-4">Examples</h3>
+                        
+                        {testcases.map((tc, idx) => (
+                            <div key={tc.id} className="mb-6 bg-[#202024] rounded-lg border border-[#27272a] overflow-hidden">
+                                <div className="bg-[#27272a] px-4 py-2 border-b border-[#3f3f46]">
+                                    <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Example {idx + 1}</span>
                                 </div>
-                            ) : (
-                                <>
-                                    <label className="text-xs text-gray-500 mb-2 uppercase tracking-wider">Output</label>
-                                    <pre className="flex-1 font-mono text-sm text-gray-300 whitespace-pre-wrap">
-                                        {output}
-                                    </pre>
-                                </>
+                                <div className="p-4 font-mono text-[13px] text-gray-300">
+                                    <p className="mb-2"><span className="text-gray-500">Input:</span> {tc.input ? tc.input.replace(/\\n/g, '\n') : ''}</p>
+                                    <p><span className="text-gray-500">Output:</span> <span className="text-green-400">{tc.expected_output ? tc.expected_output.replace(/\\n/g, '\n') : ''}</span></p>
+                                </div>
+                            </div>
+                        ))}
+
+                        <h3 className="text-[11px] font-bold text-gray-500 tracking-widest uppercase mt-8 mb-4">Constraints</h3>
+                        <div className="bg-[#202024] p-5 rounded-lg border border-[#27272a] font-mono text-[13px] text-gray-300">
+                            {problem.constraints ? problem.constraints.replace(/\\n/g, '\n').split('\n').map((line: string, i: number) => (
+                                <p key={i} className="mb-2 flex gap-2">
+                                    <span className="text-blue-500">•</span>
+                                    <span>{line}</span>
+                                </p>
+                            )) : ''}
+                        </div>
+                    </div>
+                    <div className="mt-auto border-t border-[#27272a] p-4 text-center text-xs text-gray-600 bg-[#121214]">
+                        Test Build by Atharva and Shashank
+                    </div>
+                </div>
+
+                {/* Right Panel: Editor and Output */}
+                <div className="w-[55%] flex flex-col bg-[#0f0f11]">
+                    {/* Editor Header */}
+                    <div className="flex items-center justify-between px-4 py-3 bg-[#18181b] border-b border-[#27272a]">
+                        <div className="flex items-center gap-3">
+                            <div className="w-1 h-4 bg-green-500 rounded-full"></div>
+                            <span className="text-[11px] font-bold text-gray-500 tracking-widest uppercase">Editor</span>
+                            
+                            <select
+                                value={selectedLanguage.name}
+                                onChange={handleLanguageChange}
+                                className="bg-[#27272a] hover:bg-[#3f3f46] border border-[#3f3f46] text-gray-300 text-xs rounded px-3 py-1 outline-none transition-colors ml-2 cursor-pointer font-medium"
+                            >
+                                {LANGUAGES.map(lang => (
+                                    <option key={lang.name} value={lang.name}>{lang.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={handleRunCode} disabled={isLoading} className="px-4 py-1.5 bg-[#27272a] hover:bg-[#3f3f46] text-gray-300 hover:text-white text-xs font-medium rounded transition-colors disabled:opacity-50 border border-[#3f3f46]">
+                                Run Code
+                            </button>
+                            <button onClick={handleSubmit} disabled={isLoading} className="px-5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors disabled:opacity-50 shadow-lg shadow-blue-900/20">
+                                {isLoading ? 'Running...' : 'Submit'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Editor Container */}
+                    <div className="flex-1">
+                        <Editor
+                            height="100%"
+                            theme="vs-dark"
+                            language={selectedLanguage.editorLanguage}
+                            value={code}
+                            onChange={(value) => setCode(value || "")}
+                            options={{ 
+                                minimap: { enabled: false }, 
+                                fontSize: 14, 
+                                padding: { top: 16 },
+                                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                                scrollBeyondLastLine: false,
+                                lineNumbersMinChars: 3,
+                            }}
+                            className="bg-[#0f0f11]"
+                        />
+                    </div>
+
+                    {/* Bottom Panel: Terminal Input / Output */}
+                    <div className="h-72 flex flex-col bg-[#18181b] border-t border-[#27272a]">
+                        <div className="flex items-center px-4 py-2 border-b border-[#27272a] bg-[#121214]">
+                            {/* Mac Window Controls */}
+                            <div className="flex gap-1.5 mr-6">
+                                <div className="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
+                                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></div>
+                                <div className="w-2.5 h-2.5 rounded-full bg-green-500/80"></div>
+                            </div>
+                            <span className="text-[11px] font-bold text-gray-500 tracking-widest uppercase mr-4">Console</span>
+                            
+                            {verdict && (
+                                <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded ${verdict.verdict === 'Accepted' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                                    {verdict.verdict}
+                                </span>
                             )}
+                        </div>
+                        
+                        <div className="flex flex-1 overflow-hidden">
+                            <div className="w-[45%] p-4 border-r border-[#27272a] flex flex-col bg-[#0a0a0c]">
+                                <label className="text-[10px] text-gray-600 mb-2 uppercase tracking-widest font-bold">STDIN</label>
+                                <textarea
+                                    value={customInput}
+                                    onChange={(e) => setCustomInput(e.target.value)}
+                                    className="flex-1 bg-transparent text-gray-400 outline-none resize-none font-mono text-[13px]"
+                                    spellCheck={false}
+                                    placeholder="Enter custom input here..."
+                                />
+                            </div>
+                            <div className="w-[55%] p-4 flex flex-col overflow-auto bg-[#0a0a0c]">
+                                <label className="text-[10px] text-gray-600 mb-2 uppercase tracking-widest font-bold">STDOUT / RESULT</label>
+                                {verdict ? (
+                                    <div className="font-mono text-[13px] text-gray-300">
+                                        <p className="text-blue-500 mb-4 opacity-80">forge@judge0:~$ ./solution</p>
+                                        <p className="text-gray-400 mb-4">Passed {verdict.passed} / {verdict.total} testcases.</p>
+                                        
+                                        {verdict.details && verdict.details.length > 0 && (
+                                            <div className="bg-[#18181b] p-4 rounded border border-[#27272a] text-red-400">
+                                                {verdict.details[0].error ? verdict.details[0].error : (
+                                                    <>
+                                                        <p className="mb-2"><span className="text-gray-500">Input:</span><br/>{verdict.details[0].input ? verdict.details[0].input.replace(/\\n/g, '\n') : ''}</p>
+                                                        <p className="mb-2"><span className="text-gray-500">Expected:</span><br/>{verdict.details[0].expected ? verdict.details[0].expected.replace(/\\n/g, '\n') : ''}</p>
+                                                        <p><span className="text-gray-500">Actual:</span><br/>{verdict.details[0].actual ? verdict.details[0].actual.replace(/\\n/g, '\n') : ''}</p>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                        
+                                        {verdict.verdict === 'Accepted' && (
+                                            <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
+                                                <span>Status: <span className="text-green-400">Accepted</span></span>
+                                                <span>Runtime: <span className="text-gray-300">{verdict.runtime}</span></span>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="flex-1 font-mono text-[13px] text-gray-300 whitespace-pre-wrap">
+                                        {output && <p className="text-blue-500 mb-4 opacity-80">forge@judge0:~$ ./solution</p>}
+                                        <span className={output.includes('Error') ? 'text-red-400' : 'text-gray-400'}>
+                                            {output || 'Run your code to see output here...'}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
